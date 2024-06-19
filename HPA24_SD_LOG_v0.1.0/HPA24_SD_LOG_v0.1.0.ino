@@ -20,10 +20,14 @@ File logfile;
 //SDカード内部に保存するファイルのパス及びファイル名
 String logfilepath = "/sample.txt";
 
+//チェックサムの可否
+bool check = false;
+String SD_write;
+
 void setup() {
   // put your setup code here, to run once:
 
-  Serial.begin(57600);
+  Serial.begin(115200);
   Serial.setTimeout(15);
 
   //ファイルが開けない状態であるときの例外処理
@@ -40,6 +44,8 @@ void loop() {
   if(Serial.available()>0){
     String s;
     s = Serial.readString();
+    
+    if(check){ //チェックサムが有効である場合
       int commaCount = 0;
       int nonNumericCount = 0;
       //コンマの個数と非数の個数のカウント
@@ -48,16 +54,18 @@ void loop() {
         if(!('0' <= s.charAt(i) &&  s.charAt(i) <= '9')) nonNumericCount++;
       }
       //データフォーマット形成(チェックサム付与)
-      String SD_write = String(commaCount);
+      SD_write = String(commaCount);
       SD_write.concat(",");
       SD_write.concat(String(nonNumericCount));
       SD_write.concat(",");
       SD_write.concat((s));
+    }
 
     //ログファイル保存
     logfile = SD.open(logfilepath, FILE_WRITE);
     if( logfile ){
-      logfile.print(s);
+      if( check) logfile.print(SD_write);
+      if(!check) logfile.print(s);
       logfile.close();
     }
 
