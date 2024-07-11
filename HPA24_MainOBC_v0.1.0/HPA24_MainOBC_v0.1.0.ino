@@ -55,6 +55,7 @@ SoftwareSerial altitude_uart(software_serial2_rx, software_serial2_tx);
 // shibatimerクラス　インストラクタ(shibatimerクラスのインスタンス生成)
 Timer uart_tx;
 Timer subMC;
+Timer knock;
 
 // TinygnssPulsクラス インストラクタ(TinygnssPulsクラスのインスタンス生成)
 TinyGPSPlus gps;
@@ -107,8 +108,9 @@ void setup() {
   digitalWrite(ALTITUDE_PIN, HIGH);
 
   // Timer setup
-  uart_tx.starter(C_1SEC*0.1);//10Hz
+  uart_tx.starter(C_1SEC*1);//10Hz
   subMC.starter(C_1SEC*0.1);
+  knock.starter(C_1SEC*0.1);
   timer_Init();
   timer_EI();
   delay(200);
@@ -285,26 +287,29 @@ void bne280_data_update(){
  }
 
  void active_management(){
-  switch(management){
-    case 0:
-      rsobc_activation();
-      management++;
-      break;
-    case 1:
-      airobc_activation();
-      management++;
-      break;
-    case 2:
-      bno055_data_update();
-      management++;
-      break;
-    case 3:
-      bne280_data_update();
-      management++;
-      break;
-    default:
-      management = 0;
-      break;
+  if(knock.checker()){
+    knock.repeater();
+    switch(management){
+      case 0:
+        rsobc_activation();
+        management++;
+        break;
+      case 1:
+        airobc_activation();
+        management++;
+        break;
+      case 2:
+        bno055_data_update();
+        management++;
+        break;
+      case 3:
+        bne280_data_update();
+        management++;
+        break;
+      default:
+        management = 0;
+        break;
+    }
   }
 }
 
