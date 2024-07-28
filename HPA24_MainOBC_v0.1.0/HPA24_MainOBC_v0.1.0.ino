@@ -78,7 +78,7 @@ void setup() {
   LOGER_UART.begin(115200); // Output(SD&ble) serial
   RSOBC_UART.begin(115200); // Twe-1(回転計/RSOBC) serial
   AIROBC_UART.begin(115200); // Twe-2(ピトー管/AirOBC) serial
-  pilot_input_uart.begin(115200); // 操舵入力
+  pilot_input_uart.begin(9600); // 操舵入力
   altitude_uart.begin(115200); // 高度入力
   // HW/SW uart.readString()methodセットアップ用のタイムアウト時間設定
   GPS_UART.setTimeout(10); // gps serial
@@ -108,38 +108,47 @@ void setup() {
   digitalWrite(ALTITUDE_PIN, HIGH);
 
   // Timer setup
-  uart_tx.starter(C_1SEC*1);//10Hz
-  subMC.starter(C_1SEC*0.1);
-  knock.starter(C_1SEC*0.1);
+  uart_tx.starter(C_1SEC*0.1);//10Hz
+  subMC.starter(C_1SEC*0.01);
+  knock.starter(C_1SEC*0.01);// 50*0.01 = 5*0.1
   timer_Init();
   timer_EI();
   delay(200);
 
+  pilot_input_uart.listen();
+
+  delay(200);
   // uart initialdata send
 }
 
 void loop() {
+  pilot_input_uart.listen();
+  while(pilot_input_uart.available() > 0){
+    String s = pilot_input_uart.readString();
+    data_memo[PILOT_INPUT_DATA] = s;
+    //LOGER_UART.println(s);
+  }
   // put your main code here, to run repeatedly:
   // timer管理・実行
   timer_management();
-
-  // uart rx管理
-  uart_rx_management();
 
   // 能動実行管理
   active_management();
 
   // subマイコン管理
   sub_MC_management();
-  //LOGER_UART.print(".");
+
+  // uart rx管理
+  uart_rx_management();//*/
+  //delay(5);//*/
 }
 
 // timer管理(今のところ1個だが形式を合わせるために作成)
 void timer_management(){
   // ロガーにデータ送信
   if(uart_tx.checker() == true){
-    uart_tx_task();
-    uart_tx.repeater();
+      uart_tx_task();
+      uart_tx.repeater();
     }
 }
 
@@ -148,11 +157,13 @@ void uart_tx_task(){
   String format = "app:,";
   static int num = 0;
   data_memo[TIME_DATA] = String(num);
-  String data_handler[8] = {"num,",",RS,",",GPS,",",BNO,",",BME,",",ALT,",",AIR,","PIL"};
+  String data_handler[8] = {"num,",",",",GPS,",",BNO,",",BME,",",ALT,",",AIR,","PIL"};
   for(int i=0 ; i< 8 ; i++){
     format.concat(data_handler[i]);
     format.concat(data_memo[i]);
   }
+  format.replace("\n", "");  // LFを削除
+  format.replace("\r", "");  // CRを削除
   LOGER_UART.println(format);
   num++; // 1step加算
 }
@@ -224,10 +235,17 @@ String gps_data_input_string(){
 
 void rsobc_data_update(){
   data_memo[RSOBC_DATA] = RSOBC_UART.readString();
+  data_memo[RSOBC_DATA].replace("\n", "");  // LFを削除
+  data_memo[RSOBC_DATA].replace("\r", "");  // CRを削除
+  while (RSOBC_UART.available() > 0) {
+    RSOBC_UART.read(); // 受信バッファからデータを読み出してクリア
+  }
 }
 
 void airobc_data_update(){
-  data_memo[AIROBC_DATA] = AIROBC_UART.readString();
+  while (AIROBC_UART.available() > 0) {
+    data_memo[AIROBC_DATA] = AIROBC_UART.readString();
+  }
 }
 
 // パルス生成
@@ -347,9 +365,11 @@ void pilot_input_data_MC_activaiton(){
 }
 
 void pilot_input_data_update(){
-  if(pilot_input_uart.available() > 0){
+  while(pilot_input_uart.available() > 0){
     data_memo[PILOT_INPUT_DATA] = pilot_input_uart.readString();
+    //LOGER_UART.println("-");
   }
+  //LOGER_UART.println(".");
 }
 
 void altitude_data_MC_activaiton(){
@@ -358,7 +378,14 @@ void altitude_data_MC_activaiton(){
 }
 
 void altitude_data_update(){
+  //LOGER_UART.println("..");
   if(altitude_uart.available() > 0){
+    //LOGER_UART.println("--");
     data_memo[ALTITUDE_DATA] = altitude_uart.readString();
+    data_memo[ALTITUDE_DATA].replace("\n", "");  // LFを削除
+    data_memo[ALTITUDE_DATA].replace("\r", "");  // CRを削除
   }
+  while(altitude_uart.available() > 0){
+    altitude_uart.read();
+  }//*/
 }
