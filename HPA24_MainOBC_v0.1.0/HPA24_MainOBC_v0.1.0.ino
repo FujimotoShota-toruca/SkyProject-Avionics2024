@@ -19,7 +19,7 @@
 #include "BME280.h"
 
 // DataHandring
-String data_memo[8];
+String data_memo[9];
 // data_memo address mapping
 #define TIME_DATA 0
 #define RSOBC_DATA 1
@@ -29,6 +29,7 @@ String data_memo[8];
 #define ALTITUDE_DATA 5
 #define AIROBC_DATA 6
 #define PILOT_INPUT_DATA 7
+#define BNO_ACC_DATA 8
 
 // pin uumber mapping
 // uart mapping part
@@ -118,7 +119,9 @@ void setup() {
   pilot_input_uart.listen();
 
   delay(200);
+
   // uart initialdata send
+  LOGER_UART.println("time,rs[rpm],yyyy/mm/dd,hh/mm/ss,lat[deg]/lon[deg],speed[m/s],Raw course[deg],Course[deg],  alt[m],sat,roll[rad],pitch[rad],yaw[rad],temp[degC],hum[par],pre[hPa],UFS_alt[cm],tas[m/s],DP[Pa],VS,HS,acc.x,acc.y,acc.z");
 }
 
 void loop() {
@@ -157,8 +160,8 @@ void uart_tx_task(){
   String format = "app:,";
   static int num = 0;
   data_memo[TIME_DATA] = String(num);
-  String data_handler[8] = {"num,",",",",GPS,",",BNO,",",BME,",",ALT,",",AIR,","PIL"};
-  for(int i=0 ; i< 8 ; i++){
+  String data_handler[10] = {"num,",",",",GPS,",",BNO,",",BME,",",ALT,",",AIR,","PIL","ALT","ACC"};
+  for(int i=0 ; i < 9 ; i++){
     format.concat(data_handler[i]);
     format.concat(data_memo[i]);
   }
@@ -274,6 +277,13 @@ void bne280_data_update(){
   data_memo[BME280_DATA] = String(BME280_GetTmp()) + "," + String(BME280_GetHum()) + "," + String(BME280_GetPre());
 }
 
+void bno055_acc_update(){
+  imu::Vector<3> accelermetor = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+  data_memo[BNO_ACC_DATA] = String(accelermetor.x()) + "," 
+                          + String(accelermetor.y()) + "," 
+                          + String(accelermetor.z());
+}
+
 /*-----------------------------------------------------------------------------------------------------------*/
 //Quaternion to roll-pitch-yaw Euler変換
 /***********************************
@@ -324,6 +334,9 @@ void bne280_data_update(){
         bne280_data_update();
         management++;
         break;
+      case 4:
+        bno055_acc_update();
+        management++;
       default:
         management = 0;
         break;
