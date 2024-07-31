@@ -80,8 +80,8 @@ void setup() {
   RSOBC_UART.begin(115200); // Twe-1(回転計/RSOBC) serial
   AIROBC_UART.begin(115200); // Twe-2(ピトー管/AirOBC) serial
   pilot_input_uart.begin(9600); // 操舵入力
-  altitude_uart.begin(115200); // 高度入力
-  // HW/SW uart.readString()methodセットアップ用のタイムアウト時間設定
+  altitude_uart.begin(9600); // 高度入力
+  // HW/SW uart.readString(1)methodセットアップ用のタイムアウト時間設定
   GPS_UART.setTimeout(10); // gps serial
   LOGER_UART.setTimeout(10); // Output(SD&ble) serial
   RSOBC_UART.setTimeout(10); // Twe-1(回転計/RSOBC) serial
@@ -121,16 +121,12 @@ void setup() {
   delay(200);
 
   // uart initialdata send
-  LOGER_UART.println("time,rs[rpm],yyyy/mm/dd,hh/mm/ss,lat[deg]/lon[deg],speed[m/s],Raw course[deg],Course[deg],  alt[m],sat,roll[rad],pitch[rad],yaw[rad],temp[degC],hum[par],pre[hPa],UFS_alt[cm],tas[m/s],DP[Pa],VS,HS,acc.x,acc.y,acc.z");
+  LOGER_UART.println("time,rs[rpm],yyyy/mm/dd,hh/mm/ss,lat[deg]/lon[deg],speed[m/s],Raw course[deg],Course[deg],alt[m],sat,roll[rad],pitch[rad],yaw[rad],temp[degC],hum[par],pre[hPa],UFS_alt[cm],tas[m/s],DP[Pa],VS,HS,acc.x,acc.y,acc.z");
 }
 
 void loop() {
-  pilot_input_uart.listen();
-  while(pilot_input_uart.available() > 0){
-    String s = pilot_input_uart.readString();
-    data_memo[PILOT_INPUT_DATA] = s;
-    //LOGER_UART.println(s);
-  }
+  
+  //*
   // put your main code here, to run repeatedly:
   // timer管理・実行
   timer_management();
@@ -160,7 +156,7 @@ void uart_tx_task(){
   String format = "app:,";
   static int num = 0;
   data_memo[TIME_DATA] = String(num);
-  String data_handler[10] = {"num,",",",",GPS,",",BNO,",",BME,",",ALT,",",AIR,","PIL","ALT","ACC"};
+  String data_handler[9] = {"num,",",RS,",",GPS,",",BNO,",",BME,",",ALT,",",AIR,","PIL,",",ACC,"};
   for(int i=0 ; i < 9 ; i++){
     format.concat(data_handler[i]);
     format.concat(data_memo[i]);
@@ -237,11 +233,8 @@ String gps_data_input_string(){
 }
 
 void rsobc_data_update(){
-  data_memo[RSOBC_DATA] = RSOBC_UART.readString();
-  data_memo[RSOBC_DATA].replace("\n", "");  // LFを削除
-  data_memo[RSOBC_DATA].replace("\r", "");  // CRを削除
   while (RSOBC_UART.available() > 0) {
-    RSOBC_UART.read(); // 受信バッファからデータを読み出してクリア
+    data_memo[RSOBC_DATA] = RSOBC_UART.readStringUntil('\n');
   }
 }
 
@@ -249,21 +242,6 @@ void airobc_data_update(){
   while (AIROBC_UART.available() > 0) {
     data_memo[AIROBC_DATA] = AIROBC_UART.readString();
   }
-}
-
-// パルス生成
-void pulse_generation(int pin_num){
-  digitalWrite(pin_num, LOW);
-  delay(10);
-  digitalWrite(pin_num, HIGH);
-}
-
-void rsobc_activation(){
-  RSOBC_UART.print("!");
-}
-
-void airobc_activation(){
-  AIROBC_UART.print("!");
 }
 
 void bno055_data_update(){
@@ -319,22 +297,14 @@ void bno055_acc_update(){
     knock.repeater();
     switch(management){
       case 0:
-        rsobc_activation();
-        management++;
-        break;
-      case 1:
-        airobc_activation();
-        management++;
-        break;
-      case 2:
         bno055_data_update();
         management++;
         break;
-      case 3:
+      case 1:
         bne280_data_update();
         management++;
         break;
-      case 4:
+      case 2:
         bno055_acc_update();
         management++;
       default:
@@ -350,18 +320,10 @@ void sub_MC_management(){
     //LOGER_UART.print(sub_management);
     switch(sub_management){
       case 0:
-        pilot_input_data_MC_activaiton();
-        sub_management++;
-        break;
-      case 2:
         pilot_input_data_update();
         sub_management++;
         break;
       case 1:
-        altitude_data_MC_activaiton();
-        sub_management++;
-        break;
-      case 3:
         altitude_data_update();
         sub_management++;
         break;
@@ -372,33 +334,32 @@ void sub_MC_management(){
   }
 }
 
-void pilot_input_data_MC_activaiton(){
-  pilot_input_uart.listen();
-  pulse_generation(PILOT_INPUT_PIN);
-}
-
 void pilot_input_data_update(){
+  pilot_input_uart.listen();
+  long int i = 0;
+  while(pilot_input_uart.available() <= 0) {
+    i++;
+    if(i >= 35000) break;
+  }
   while(pilot_input_uart.available() > 0){
-    data_memo[PILOT_INPUT_DATA] = pilot_input_uart.readString();
+    String s = pilot_input_uart.readString();
+    data_memo[PILOT_INPUT_DATA] = s;
     //LOGER_UART.println("-");
   }
   //LOGER_UART.println(".");
 }
 
-void altitude_data_MC_activaiton(){
-  altitude_uart.listen();
-  pulse_generation(ALTITUDE_PIN);
-}
-
 void altitude_data_update(){
-  //LOGER_UART.println("..");
-  if(altitude_uart.available() > 0){
-    //LOGER_UART.println("--");
-    data_memo[ALTITUDE_DATA] = altitude_uart.readString();
-    data_memo[ALTITUDE_DATA].replace("\n", "");  // LFを削除
-    data_memo[ALTITUDE_DATA].replace("\r", "");  // CRを削除
+  altitude_uart.listen();
+  long int i = 0;
+  while(altitude_uart.available() <= 0) {
+    i++;
+    if(i >= 35000) break;
   }
+  //LOGER_UART.println(i);
   while(altitude_uart.available() > 0){
-    altitude_uart.read();
-  }//*/
+    String s = altitude_uart.readString();
+    data_memo[ALTITUDE_DATA] = s;
+    //LOGER_UART.println(s);
+  }
 }
